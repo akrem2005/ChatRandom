@@ -3,109 +3,164 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Video Calling App</title>
+    <title>Socket.io Mazing</title>
     <style>
       body {
+        font-family: Arial, sans-serif;
+        margin: 0;
+        padding: 0;
         display: flex;
-        flex-direction: column;
         align-items: center;
         justify-content: center;
         height: 100vh;
-        margin: 0;
-        font-family: Arial, sans-serif;
+        background-color: #f4f4f4;
+      }
+
+      #roomInput {
+        padding: 10px;
+        font-size: 16px;
+        margin-right: 10px;
+      }
+
+      #joinButton {
+        padding: 10px;
+        font-size: 16px;
+      }
+
+      #videoContainer {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 20px;
+        margin-top: 20px;
       }
 
       video {
-        width: 50%;
-        max-width: 600px;
-        margin-bottom: 20px;
-        border: 1px solid #ccc;
-        border-radius: 5px;
-      }
-
-      button {
-        padding: 10px;
-        font-size: 16px;
-        margin: 5px;
-        cursor: pointer;
-      }
-
-      #status {
-        margin-top: 10px;
-        font-weight: bold;
+        max-width: 100%;
+        max-height: 100%;
+        border: 1px solid #ddd;
+        border-radius: 8px;
       }
     </style>
   </head>
   <body>
-    <video id="localVideo" autoplay muted></video>
-    <video id="remoteVideo" autoplay></video>
+    <div>
+      <label for="roomInput">Room ID:</label>
+      <input type="text" id="roomInput" placeholder="Enter room ID" />
+      <button id="joinButton">Join Room</button>
+    </div>
+    <div id="videoContainer"></div>
 
-    <div id="status">Status: Not Connected</div>
-    <button id="startCall" onclick="startCall()">Start Call</button>
-    <button id="endCall" onclick="endCall()" disabled>End Call</button>
-
-    <script src="/socket.io/socket.io.js"></script>
-    <script
-      src="https://cdnjs.cloudflare.com/ajax/libs/simple-peer/9.11.1/simplepeer.min.js"
-      integrity="sha512-0f7Ahsuvr+/P2btTY4mZIw9Vl23lS6LY/Y7amdkmUg2dqsUF+cTe4QjWvj/NIBHJoGksOiqndKQuI9yzn2hB0g=="
-      crossorigin="anonymous"
-      referrerpolicy="no-referrer"
-    ></script>
-
+    <script src="https://cdn.socket.io/4.1.2/socket.io.min.js"></script>
     <script>
-      const socket = io();
-      let peer;
+      document.addEventListener("DOMContentLoaded", () => {
+        const socket = io();
 
-      function startCall() {
-        navigator.mediaDevices
-          .getUserMedia({ video: true, audio: true })
-          .then((stream) => {
-            const localVideo = document.getElementById("localVideo");
-            localVideo.srcObject = stream;
+        const roomInput = document.getElementById("roomInput");
+        const joinButton = document.getElementById("joinButton");
+        const videoContainer = document.getElementById("videoContainer");
 
-            peer = new SimplePeer({ initiator: true, trickle: false, stream });
+        joinButton.addEventListener("click", () => {
+          const room = roomInput.value.trim();
+          if (room !== "") {
+            // Emit join-room event to the server
+            socket.emit("join-room", room);
+            startVideoStreaming(room);
+          }
+        });
 
-            peer.on("signal", (data) => {
-              socket.emit("join-room", {
-                room: "your-room-name",
-                signal: data,
+        // Handle signal event from the server
+        socket.on("signal", (data) => {
+          // Handle signaling data and update UI (e.g., video elements)
+          handleSignalingData(data);
+        });
+
+        // Handle disconnect event
+        socket.on("disconnect", () => {
+          console.log("Disconnected from the server");
+          // Implement any necessary UI updates or logic on disconnect
+        });
+
+        function startVideoStreaming(room) {
+          navigator.mediaDevices
+            .getUserMedia({ video: true, audio: true })
+            .then((stream) => {
+              const localVideo = document.createElement("video");
+              localVideo.srcObject = stream;
+              localVideo.autoplay = true;
+              videoContainer.appendChild(localVideo);
+
+              // Send signaling data to the server
+              socket.emit("signal", { room, type: "user-connected" });
+
+              // Handle remote user connection
+              socket.on("signal", (data) => {
+                if (data.type === "user-connected" && data.room === room) {
+                  handleRemoteUserConnection(data, stream);
+                }
               });
-              setStatus("Connecting...");
-            });
 
-            socket.on("signal", (data) => {
-              peer.signal(data.signal);
+              // Handle remote user disconnection
+              socket.on("disconnect", () => {
+                handleRemoteUserDisconnection(stream);
+              });
+            })
+            .catch((error) => {
+              console.error("Error accessing media devices:", error);
             });
-
-            peer.on("connect", () => {
-              setStatus("Connected");
-              document.getElementById("startCall").disabled = true;
-              document.getElementById("endCall").disabled = false;
-            });
-
-            peer.on("stream", (remoteStream) => {
-              const remoteVideo = document.getElementById("remoteVideo");
-              remoteVideo.srcObject = remoteStream;
-            });
-          })
-          .catch((error) => {
-            console.error("Error accessing media devices:", error);
-            setStatus("Error accessing media devices");
-          });
-      }
-
-      function endCall() {
-        if (peer) {
-          peer.destroy();
-          setStatus("Call ended");
-          document.getElementById("startCall").disabled = false;
-          document.getElementById("endCall").disabled = true;
         }
-      }
 
-      function setStatus(status) {
-        document.getElementById("status").innerText = `Status: ${status}`;
-      }
+        function handleSignalingData(data) {
+          // Handle signaling data and update UI (e.g., video elements)
+          // For simplicity, you can use the data to update video elements in the videoContainer
+        }
+
+        function handleRemoteUserConnection(data, localStream) {
+          const remoteVideo = document.createElement("video");
+          remoteVideo.srcObject = localStream;
+          remoteVideo.autoplay = true;
+          videoContainer.appendChild(remoteVideo);
+
+          // Create an RTCPeerConnection for WebRTC communication
+          const peerConnection = new RTCPeerConnection();
+          peerConnection.addStream(localStream);
+
+          // Handle ice candidate events
+          peerConnection.onicecandidate = (event) => {
+            if (event.candidate) {
+              socket.emit("signal", {
+                room: data.room,
+                type: "ice-candidate",
+                candidate: event.candidate,
+              });
+            }
+          };
+
+          // Handle data channel events (if needed)
+
+          // Create an offer to start the WebRTC communication
+          peerConnection
+            .createOffer()
+            .then((offer) => peerConnection.setLocalDescription(offer))
+            .then(() => {
+              socket.emit("signal", {
+                room: data.room,
+                type: "offer",
+                offer: peerConnection.localDescription,
+              });
+            })
+            .catch((error) => {
+              console.error("Error creating offer:", error);
+            });
+        }
+
+        function handleRemoteUserDisconnection(localStream) {
+          // Handle remote user disconnection and update UI (e.g., remove video element)
+          // For simplicity, you can remove the video element from the videoContainer
+          videoContainer.innerHTML = "";
+          localStream.getTracks().forEach((track) => track.stop());
+        }
+      });
     </script>
   </body>
 </html>
