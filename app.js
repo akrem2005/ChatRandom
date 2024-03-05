@@ -10,7 +10,8 @@ app.get("/", (req, res) => {
   res.sendFile(__dirname + "/index.html");
 });
 
-const users = {};
+// Keep track of users in rooms
+const usersInRooms = {};
 
 io.on("connection", (socket) => {
   console.log("A user connected:", socket.id);
@@ -18,8 +19,13 @@ io.on("connection", (socket) => {
   // Handle disconnection
   socket.on("disconnect", () => {
     console.log("User disconnected:", socket.id);
-    // Remove the user from the users object
-    delete users[socket.id];
+    // Remove the user from the usersInRooms object
+    if (usersInRooms[socket.id]) {
+      const room = usersInRooms[socket.id].room;
+      delete usersInRooms[socket.id];
+      // Notify other users in the room about the disconnection
+      io.to(room).emit("userDisconnected", { disconnectedID: socket.id, room });
+    }
   });
 
   // Handle call initiation
@@ -50,7 +56,9 @@ io.on("connection", (socket) => {
   // Handle joining a room
   socket.on("joinRoom", (room) => {
     socket.join(room);
-    users[socket.id] = { room };
+    usersInRooms[socket.id] = { room };
+    // Notify other users in the room about the new connection
+    io.to(room).emit("userConnected", { connectedID: socket.id, room });
   });
 });
 
