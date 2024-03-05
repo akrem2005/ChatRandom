@@ -111,8 +111,75 @@
         }
 
         function handleSignalingData(data) {
-          // Handle signaling data and update UI (e.g., video elements)
-          // For simplicity, you can use the data to update video elements in the videoContainer
+          const { type, offer, answer, candidate, room } = data;
+
+          switch (type) {
+            case "offer":
+              handleOffer(offer, room);
+              break;
+            case "answer":
+              handleAnswer(answer, room);
+              break;
+            case "ice-candidate":
+              handleIceCandidate(candidate, room);
+              break;
+            // Add more cases if needed for other types of signaling data
+          }
+        }
+
+        function handleOffer(offer, room) {
+          const peerConnection = new RTCPeerConnection();
+
+          // Handle ice candidate events
+          peerConnection.onicecandidate = (event) => {
+            if (event.candidate) {
+              socket.emit("signal", {
+                room: room,
+                type: "ice-candidate",
+                candidate: event.candidate,
+              });
+            }
+          };
+
+          // Handle data channel events (if needed)
+
+          // Set remote description and create answer
+          peerConnection
+            .setRemoteDescription(new RTCSessionDescription(offer))
+            .then(() => peerConnection.createAnswer())
+            .then((answer) => peerConnection.setLocalDescription(answer))
+            .then(() => {
+              socket.emit("signal", {
+                room: room,
+                type: "answer",
+                answer: peerConnection.localDescription,
+              });
+            })
+            .catch((error) => {
+              console.error("Error handling offer:", error);
+            });
+        }
+
+        function handleAnswer(answer, room) {
+          const peerConnection = new RTCPeerConnection();
+
+          // Set remote description
+          peerConnection
+            .setRemoteDescription(new RTCSessionDescription(answer))
+            .catch((error) => {
+              console.error("Error handling answer:", error);
+            });
+        }
+
+        function handleIceCandidate(candidate, room) {
+          const peerConnection = new RTCPeerConnection();
+
+          // Add ice candidate
+          peerConnection
+            .addIceCandidate(new RTCIceCandidate(candidate))
+            .catch((error) => {
+              console.error("Error handling ice candidate:", error);
+            });
         }
 
         function handleRemoteUserConnection(data, localStream) {
