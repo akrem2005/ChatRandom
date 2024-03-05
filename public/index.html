@@ -27,7 +27,8 @@
         font-size: 16px;
       }
 
-      #videoContainer {
+      #localVideoContainer,
+      #remoteVideoContainer {
         display: flex;
         flex-wrap: wrap;
         justify-content: center;
@@ -49,16 +50,22 @@
       <input type="text" id="roomInput" placeholder="Enter room ID" />
       <button id="joinButton">Join Room</button>
     </div>
-    <div id="videoContainer"></div>
+    <div id="localVideoContainer"></div>
+    <div id="remoteVideoContainer"></div>
 
     <script src="https://cdn.socket.io/4.1.2/socket.io.min.js"></script>
     <script>
       document.addEventListener("DOMContentLoaded", () => {
-        const socket = io();
+        const socket = io("http://localhost:3000");
 
         const roomInput = document.getElementById("roomInput");
         const joinButton = document.getElementById("joinButton");
-        const videoContainer = document.getElementById("videoContainer");
+        const localVideoContainer = document.getElementById(
+          "localVideoContainer"
+        );
+        const remoteVideoContainer = document.getElementById(
+          "remoteVideoContainer"
+        );
 
         joinButton.addEventListener("click", () => {
           const room = roomInput.value.trim();
@@ -88,7 +95,7 @@
               const localVideo = document.createElement("video");
               localVideo.srcObject = stream;
               localVideo.autoplay = true;
-              videoContainer.appendChild(localVideo);
+              localVideoContainer.appendChild(localVideo);
 
               // Send signaling data to the server
               socket.emit("signal", { room, type: "user-connected" });
@@ -118,10 +125,10 @@
               handleOffer(offer, room);
               break;
             case "answer":
-              handleAnswer(answer, room);
+              handleAnswer(answer);
               break;
             case "ice-candidate":
-              handleIceCandidate(candidate, room);
+              handleIceCandidate(candidate);
               break;
             // Add more cases if needed for other types of signaling data
           }
@@ -160,7 +167,7 @@
             });
         }
 
-        function handleAnswer(answer, room) {
+        function handleAnswer(answer) {
           const peerConnection = new RTCPeerConnection();
 
           // Set remote description
@@ -171,7 +178,7 @@
             });
         }
 
-        function handleIceCandidate(candidate, room) {
+        function handleIceCandidate(candidate) {
           const peerConnection = new RTCPeerConnection();
 
           // Add ice candidate
@@ -186,7 +193,7 @@
           const remoteVideo = document.createElement("video");
           remoteVideo.srcObject = localStream;
           remoteVideo.autoplay = true;
-          videoContainer.appendChild(remoteVideo);
+          remoteVideoContainer.appendChild(remoteVideo);
 
           // Create an RTCPeerConnection for WebRTC communication
           const peerConnection = new RTCPeerConnection();
@@ -224,7 +231,7 @@
         function handleRemoteUserDisconnection(localStream) {
           // Handle remote user disconnection and update UI (e.g., remove video element)
           // For simplicity, you can remove the video element from the videoContainer
-          videoContainer.innerHTML = "";
+          remoteVideoContainer.innerHTML = "";
           localStream.getTracks().forEach((track) => track.stop());
         }
       });
