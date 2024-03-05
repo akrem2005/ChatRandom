@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Room-based Video Chat</title>
+    <style>
+      body {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        height: 100vh;
+        margin: 0;
+      }
+
+      h1 {
+        margin-bottom: 20px;
+      }
+
+      #localVideo,
+      #remoteVideo {
+        width: 100%;
+        max-width: 400px;
+        margin-bottom: 20px;
+      }
+
+      #callButton,
+      #answerButton,
+      #roomInput {
+        margin-bottom: 10px;
+      }
+
+      #roomInput {
+        padding: 5px;
+      }
+
+      #callStatus {
+        color: red;
+        font-weight: bold;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Room-based Video Chat</h1>
+    <video id="localVideo" autoplay playsinline muted></video>
+    <video id="remoteVideo" autoplay playsinline></video>
+    <div id="callStatus"></div>
+    <input type="text" id="roomInput" placeholder="Enter Room Name" />
+    <button id="joinButton" onclick="joinRoom()">Join Room</button>
+    <button id="callButton" onclick="callUser()">Call User</button>
+    <button id="answerButton" onclick="answerCall()" disabled>
+      Answer Call
+    </button>
+
+    <script src="https://cdn.socket.io/4.0.1/socket.io.min.js"></script>
+    <script>
+      const localVideo = document.getElementById("localVideo");
+      const remoteVideo = document.getElementById("remoteVideo");
+      const callButton = document.getElementById("callButton");
+      const answerButton = document.getElementById("answerButton");
+      const joinButton = document.getElementById("joinButton");
+      const roomInput = document.getElementById("roomInput");
+      const callStatus = document.getElementById("callStatus");
+      let localStream;
+      let socket;
+
+      // Get user media
+      navigator.mediaDevices
+        .getUserMedia({ video: true, audio: true })
+        .then((stream) => {
+          localStream = stream;
+          localVideo.srcObject = stream;
+        })
+        .catch((error) => {
+          console.error("Error accessing camera and microphone:", error);
+        });
+
+      // Connect to the signaling server (backend)
+      socket = io.connect();
+
+      // Handle incoming call from a user in the same room
+      socket.on("incomingCall", ({ callerID, room }) => {
+        // Display incoming call notification
+        callStatus.innerText = `Incoming call from ${callerID} in room ${room}`;
+        answerButton.disabled = false;
+      });
+
+      // Handle call answered by the callee
+      socket.on("callAnswered", ({ answererID, room }) => {
+        // Display call answered notification
+        callStatus.innerText = `Call answered by ${answererID} in room ${room}`;
+      });
+
+      // Make a call to a user in the same room
+      const callUser = () => {
+        const calleeID = getRandomUserID();
+        const room = roomInput.value.trim();
+        if (!room) {
+          callStatus.innerText = "Please enter a room name";
+          return;
+        }
+
+        if (!calleeID) {
+          callStatus.innerText = "No available users in the room";
+          return;
+        }
+
+        socket.emit("call", { callerID: socket.id, calleeID, room });
+        callStatus.innerText = `Calling user in room ${room}...`;
+        callButton.disabled = true;
+      };
+
+      // Answer the call from a user in the same room
+      const answerCall = () => {
+        // You may want to implement call answer logic, set up peer connection, etc.
+        // For now, just display a message
+        callStatus.innerText = "Answering call...";
+        answerButton.disabled = true;
+      };
+
+      // Join a room
+      const joinRoom = () => {
+        const room = roomInput.value.trim();
+        if (room) {
+          socket.emit("joinRoom", room);
+          joinButton.disabled = true;
+        } else {
+          callStatus.innerText = "Please enter a room name";
+        }
+      };
+
+      // Generate a random user ID (replace this with your logic)
+      const getRandomUserID = () => {
+        const connectedUsers = Object.keys(socket.connected).filter(
+          (userID) => userID !== socket.id
+        );
+        return connectedUsers.length > 0
+          ? connectedUsers[Math.floor(Math.random() * connectedUsers.length)]
+          : null;
+      };
+    </script>
+  </body>
+</html>
